@@ -4,6 +4,7 @@ solving a simple 4*4 Gridworld almost similar to openAI gym FrozenLake using SAR
 WRITTEN BY MOHAMMAD ASADOLAHI  
 Mohammad.E.Asadolahi@gmail.com  
 https://github.com/mohammadAsadolahi  
+**!!!! its not deep learning SARSA implementation !!! its deployed using Qtable**   
 this program is using Reinfrocement learning to solve a 4*4 gridworld like frozen lake enviroment in open ai gym  
 the method used is policy iteration whitch is one of fundamental manners of Dynamic Programing  
 
