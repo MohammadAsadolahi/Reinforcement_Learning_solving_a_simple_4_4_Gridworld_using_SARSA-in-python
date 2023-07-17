@@ -6,7 +6,6 @@ class GridWorld:
         # O O O *
         # O * O O
         # O * 0 T
-        self.qTable = None
         self.actionSpace = ('U', 'D', 'L', 'R')
         self.actions = {
             (0, 0): ('D', 'R'),
@@ -24,33 +23,13 @@ class GridWorld:
             (3, 0): ('U', 'R'),
             (3, 1): ('U', 'L', 'R'),
             (3, 2): ('U', 'L', 'R')
+            #(3,3) isn't included because its the terminal state
         }
         self.rewards = {(3, 3): 0.5, (1, 3): -0.5, (2, 1):-0.5, (3, 1):-0.5}
-        self.explored = 0
-        self.exploited = 0
-        self.initialQtable()
-
-    def initialQtable(self):
-      self.qTable = {}
-      for state in self.actions:
-          self.qTable[state]={}
-          for move in self.actions[state]:
-              self.qTable[state][move]=0
-      print(self.qTable)
-
-    def updateQtable(self, newQ,updateRate=0.05):
-        for state in self.qTable:
-            for action in self.qTable[state]:
-                self.qTable[state][action] = self.qTable[state][action]+(updateRate*(newQ[state][action]-self.qTable[state][action]))
-   
-    def getRandomPolicy(self):
-        policy = {}
-        for state in self.actions:
-            policy[state] = np.random.choice(self.actions[state])
-        return policy
-
+        
     def reset(self):
-        return (0, 0)
+        self.state = (0, 0)
+        return self.state
         
     def is_terminal(self, s):
         return s not in self.actions
@@ -69,21 +48,56 @@ class GridWorld:
           column += 1
       return row,column
 
-    def chooseAction(self, state, policy, exploreRate=0.01):
-        if exploreRate > np.random.rand():
-            self.explored += 1
-            return np.random.choice(self.actions[state])
-        self.exploited += 1
-        return policy[state]
-
-    def move(self, state, policy, exploreRate):
-        action = self.chooseAction(state, policy, exploreRate)
-        row,column=self.getNewState(state,action)
+    def move(self, action):
+        row,column=self.getNewState(self.state,action)
+        self.state=(row, column)
         if (row, column) in self.rewards:
-            return action,(row, column),self.rewards[(row, column)]
-        return action,(row, column),-0.01
+            return (row, column),self.rewards[(row, column)],self.is_terminal(self.state)
+        return (row, column),-0.01,self.is_terminal(self.state)
+class Agent:
+    def __init__(self,action_space, exploreRate=0.01):
+        self.qTable = None
+        self.action_space=action_space
+        self.exploreRate= exploreRate
+        self.initial_random_policy()
+        self.initialQtable()
+        self.explored = 0
+        self.exploited = 0
+
+    def initialQtable(self):
+        self.qTable = {}
+        for state in self.action_space:
+            self.qTable[state]={}
+            for move in self.action_space[state]:
+                self.qTable[state][move]=0
+        print(self.qTable)
         
-    def printPolicy(self, policy):
+    def updateQtable(self, newQ,updateRate=0.05):
+        for state in self.qTable:
+            for action in self.qTable[state]:
+                self.qTable[state][action] = self.qTable[state][action]+(updateRate*(newQ[state][action]-self.qTable[state][action]))
+    
+    def chooseAction(self, state):
+        if self.exploreRate > np.random.rand():
+            self.explored += 1
+            return np.random.choice(self.action_space[state])
+        self.exploited += 1
+        return self.policy[state]
+    
+    def initial_random_policy(self):
+        self.policy = {}
+        for state in self.action_space:
+            self.policy[state] = np.random.choice(self.action_space[state])
+            
+    def learn(self,state,nextState,reward,done):
+        if not done:
+            targetQ= reward + (0.9 * self.qTable[nextState][self.chooseAction(nextState)])
+            self.qTable[state][action]=self.qTable[state][action]+alpha*(targetQ - self.qTable[state][action])
+    
+    def update_policy(self):
+        for state in self.policy:
+            self.policy[state] = max(self.qTable[state], key=self.qTable[state].get)
+def printPolicy(policy):
         line = ""
         counter = 0
         for item in policy:
@@ -96,12 +110,9 @@ class GridWorld:
                 line = ""
         print(line)
         print("----------------------------")
-        
+env=GridWorld()
+agent = Agent(env.actions)
 
-        
-        
-env= GridWorld()
-policy = env.getRandomPolicy()
 # policy = {(0, 0): 'R', (0, 1): 'R', (0, 2): 'D', (0, 3): 'L', (1, 0): 'U', (1, 1): 'R', (1, 2): 'D', (1, 3): 'D'
 #     ,(2, 0): 'D', (2, 1): 'R', (2, 2): 'R', (2, 3): 'D', (3, 0): 'R', (3, 1): 'R', (3, 2): 'R'}
 # env.printPolicy(policy)
@@ -110,18 +121,17 @@ alpha=0.1
 for i in range(2000):
     state = env.reset()
     stepCounts=0
-    while (not env.is_terminal(state)) and (stepCounts<20):
-        action, nextState, reward = env.move(state, policy,0.01)
+    done=False
+    while not done and (stepCounts<20):
+        action=agent.chooseAction(state)
+        nextState, reward, done = env.move(action)
         stepCounts += 1
         targetQ=reward
-        if not env.is_terminal(nextState):
-          targetQ=reward+(0.9*env.qTable[nextState][env.chooseAction(nextState,policy)])
-        env.qTable[state][action]=env.qTable[state][action]+alpha*(targetQ-env.qTable[state][action])
+        agent.learn(state,nextState, reward, done )
         state = nextState
-    for state in policy:
-      policy[state] = max(env.qTable[state], key=env.qTable[state].get)
-    if (i+1)%200==0:
+    agent.update_policy()
+    if i%200==0:
         print(f"\n\n\n step:{i}")
-        env.printPolicy(policy)
+        printPolicy(agent.policy)
         print("\n")
-print(f"exploited:{env.exploited}  explored:{env.explored}")
+print(f"exploited:{agent.exploited}  explored:{agent.explored}")
